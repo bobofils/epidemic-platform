@@ -1,16 +1,31 @@
 import streamlit as st
-import requests
 import pandas as pd
 import plotly.graph_objects as go
 
+from backend.models.sir import run_sir
+from backend.models.seir import run_seir
+from backend.models.seihrd import run_seihrd
+
+# =====================================================
+# CONFIGURATION PAGE
+# =====================================================
+
 st.set_page_config(
-    page_title="COVID Dashboard",
+    page_title="Plateforme Epidémique",
     layout="wide"
 )
 
-st.title(
-    "Plateforme de Simulation Epidémique"
-)
+# =====================================================
+# TITRE
+# =====================================================
+
+st.title("Plateforme de Simulation Epidémique")
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+
+st.sidebar.header("Paramètres")
 
 model = st.sidebar.selectbox(
     "Modèle",
@@ -40,58 +55,51 @@ exposed = st.sidebar.slider(
 
 beta = st.sidebar.slider(
     "Transmission β",
-    0.1,
-    1.0,
-    0.3
+    0.10,
+    1.00,
+    0.30
 )
 
 gamma = st.sidebar.slider(
     "Guérison γ",
     0.01,
-    1.0,
-    0.1
+    1.00,
+    0.10
 )
 
 sigma = st.sidebar.slider(
     "Incubation σ",
     0.01,
-    1.0,
-    0.2
+    1.00,
+    0.20
 )
 
 hosp_rate = st.sidebar.slider(
     "Hospitalisation",
     0.01,
-    1.0,
-    0.1
+    1.00,
+    0.10
 )
 
 death_rate = st.sidebar.slider(
     "Décès",
-    0.001,
-    0.5,
+    0.00,
+    0.50,
     0.02
-)
-
-recovery_h = st.sidebar.slider(
-    "Guérison H",
-    0.01,
-    1.0,
-    0.1
 )
 
 vaccination_rate = st.sidebar.slider(
     "Vaccination",
-    0.0,
-    0.1,
+    0.00,
+    0.10,
     0.01
 )
 
 barrier_effect = st.sidebar.slider(
     "Mesures barrières",
-    0.0,
-    1.0,
-    0.3
+    0.00,
+    1.00,
+    0.30
 )
 
 lockdown_start = st.sidebar.slider(
@@ -110,9 +118,9 @@ lockdown_end = st.sidebar.slider(
 
 lockdown_strength = st.sidebar.slider(
     "Intensité confinement",
-    0.0,
-    1.0,
-    0.5
+    0.00,
+    1.00,
+    0.50
 )
 
 days = st.sidebar.slider(
@@ -122,94 +130,209 @@ days = st.sidebar.slider(
     180
 )
 
+# =====================================================
+# BOUTON
+# =====================================================
+
 if st.button("Lancer Simulation"):
 
-    payload = {
+    # -------------------------------------------------
+    # PARAMETRES MODIFIES
+    # -------------------------------------------------
 
-        "model": model,
+    effective_beta = beta
 
-        "population": population,
-
-        "infected": infected,
-
-        "exposed": exposed,
-
-        "beta": beta,
-
-        "gamma": gamma,
-
-        "sigma": sigma,
-
-        "hosp_rate": hosp_rate,
-
-        "death_rate": death_rate,
-
-        "recovery_h": recovery_h,
-
-        "vaccination_rate": vaccination_rate,
-
-        "barrier_effect": barrier_effect,
-
-        "lockdown_start": lockdown_start,
-
-        "lockdown_end": lockdown_end,
-
-        "lockdown_strength": lockdown_strength,
-
-        "days": days
-    }
-
-    response = requests.post(
-        "http://127.0.0.1:8000/simulate",
-        json=payload
+    # Mesures barrières
+    effective_beta = effective_beta * (
+        1 - barrier_effect
     )
 
-    data = response.json()
+    # Confinement
+    if lockdown_start < lockdown_end:
+
+        effective_beta = effective_beta * (
+            1 - lockdown_strength
+        )
+
+    # Vaccination
+    vaccinated_population = int(
+        population * vaccination_rate
+    )
+
+    adjusted_population = (
+        population - vaccinated_population
+    )
+
+    # -------------------------------------------------
+    # MODELE SIR
+    # -------------------------------------------------
+
+    if model == "SIR":
+
+        data = run_sir(
+            adjusted_population,
+            infected,
+            0,
+            effective_beta,
+            gamma,
+            days
+        )
+
+    # -------------------------------------------------
+    # MODELE SEIR
+    # -------------------------------------------------
+
+    elif model == "SEIR":
+
+        data = run_seir(
+            adjusted_population,
+            exposed,
+            infected,
+            0,
+            effective_beta,
+            sigma,
+            gamma,
+            days
+        )
+
+    # -------------------------------------------------
+    # MODELE SEIHRD
+    # -------------------------------------------------
+
+    elif model == "SEIHRD":
+
+        data = run_seihrd(
+            adjusted_population,
+            exposed,
+            infected,
+            effective_beta,
+            sigma,
+            gamma,
+            hosp_rate,
+            death_rate,
+            days
+        )
+
+    # -------------------------------------------------
+    # DATAFRAME
+    # -------------------------------------------------
+
+    df = pd.DataFrame(data)
+
+    # -------------------------------------------------
+    # GRAPHIQUES
+    # -------------------------------------------------
 
     fig = go.Figure()
 
-    for key in data:
+    for column in df.columns:
 
-        if key != "days":
+        if column != "days":
 
             fig.add_trace(
+
                 go.Scatter(
-                    x=data["days"],
-                    y=data[key],
-                    name=key
+                    x=df["days"],
+                    y=df[column],
+                    mode="lines",
+                    name=column
                 )
+
             )
 
-    st.plotly_chart(fig)
+    fig.update_layout(
+        title="Simulation Epidémique",
+        template="plotly_dark",
+        xaxis_title="Temps (jours)",
+        yaxis_title="Population",
+        height=650
+    )
 
-    if "H" in data:
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-        col1, col2, col3 = st.columns(3)
+    # -------------------------------------------------
+    # INDICATEURS
+    # -------------------------------------------------
 
-        col1.metric(
-            "Pic Hospitalier",
-            int(max(data["H"]))
+    st.subheader("Indicateurs")
+
+    col1, col2, col3 = st.columns(3)
+
+    peak_infected = int(
+        max(df["I"])
+    )
+
+    col1.metric(
+        "Pic Infectieux",
+        peak_infected
+    )
+
+    if "H" in df.columns:
+
+        peak_hospital = int(
+            max(df["H"])
         )
 
-        col2.metric(
-            "Décès Totaux",
-            int(data["D"][-1])
+    else:
+
+        peak_hospital = 0
+
+    col2.metric(
+        "Pic Hospitalier",
+        peak_hospital
+    )
+
+    if "D" in df.columns:
+
+        total_deaths = int(
+            df["D"].iloc[-1]
         )
 
-        Rt = beta / gamma
+    else:
 
-        col3.metric(
-            "R0 Effectif",
-            round(Rt, 2)
-        )
+        total_deaths = 0
 
-    df = pd.DataFrame(data)
+    col3.metric(
+        "Décès Totaux",
+        total_deaths
+    )
+
+    Rt = effective_beta / gamma
+
+    st.metric(
+        "R0 Effectif",
+        round(Rt, 2)
+    )
+
+    # -------------------------------------------------
+    # TABLEAU
+    # -------------------------------------------------
+
+    st.subheader("Données")
+
+    st.dataframe(df)
+
+    # -------------------------------------------------
+    # EXPORT CSV
+    # -------------------------------------------------
 
     csv = df.to_csv(index=False)
 
     st.download_button(
-        "Télécharger CSV",
-        csv,
-        "simulation.csv",
-        "text/csv"
+        label="Télécharger CSV",
+        data=csv,
+        file_name="simulation.csv",
+        mime="text/csv"
     )
+
+    # -------------------------------------------------
+    # MESSAGE
+    # -------------------------------------------------
+
+    st.success(
+        "Simulation terminée avec succès."
+    )
+```
