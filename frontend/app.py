@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from backend.models.sir import run_sir
-from backend.models.seir import run_seir
-from backend.models.seihrd import run_seihrd
+from models.sir import run_sir
+from models.seir import run_seir
+from models.seihrd import run_seihrd
 
 # =====================================================
 # CONFIGURATION PAGE
