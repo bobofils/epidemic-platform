@@ -335,4 +335,3 @@ if st.button("Lancer Simulation"):
     st.success(
         "Simulation terminée avec succès."
     )
-```
