@@ -167,7 +167,12 @@ if st.button("Lancer Simulation"):
         doc.build(content)
         pdf_buffer.seek(0)
 
-        st.download_button("PDF", pdf_buffer, "report.pdf", "application/pdf")
+        st.download_button(
+            "PDF",
+            pdf_buffer,
+            "report.pdf",
+            "application/pdf"
+        )
 
         st.success("Simulation terminée avec succès")
 
