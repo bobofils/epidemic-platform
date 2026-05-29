@@ -1,55 +1,29 @@
 import numpy as np
-from scipy.integrate import odeint
 
+def run_sir(population, infected, recovered, beta, gamma, days):
 
-def equations(y, t, beta, gamma):
+    S = population - infected - recovered
+    I = infected
+    R = recovered
 
-    S, I, R = y
+    results = {"days": [], "S": [], "I": [], "R": []}
 
-    dSdt = -beta * S * I
-    dIdt = beta * S * I - gamma * I
-    dRdt = gamma * I
+    for t in range(days):
 
-    return [dSdt, dIdt, dRdt]
+        new_inf = beta * S * I / max(population, 1)
+        new_rec = gamma * I
 
+        S -= new_inf
+        I += new_inf - new_rec
+        R += new_rec
 
-def run_sir(
-    population,
-    infected,
-    recovered,
-    beta,
-    gamma,
-    days
-):
+        S = max(S, 0)
+        I = max(I, 0)
+        R = max(R, 0)
 
-    susceptible = (
-        population
-        - infected
-        - recovered
-    )
+        results["days"].append(t)
+        results["S"].append(S)
+        results["I"].append(I)
+        results["R"].append(R)
 
-    y0 = [
-        susceptible,
-        infected,
-        recovered
-    ]
-
-    t = np.linspace(
-        0,
-        days,
-        days
-    )
-
-    result = odeint(
-        equations,
-        y0,
-        t,
-        args=(beta, gamma)
-    )
-
-    return {
-        "days": t.tolist(),
-        "S": result[:, 0].tolist(),
-        "I": result[:, 1].tolist(),
-        "R": result[:, 2].tolist()
-    }
+    return results

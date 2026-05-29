@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import io
 import numpy as np
+from io import BytesIO
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from io import BytesIO
 
 from sir import run_sir
 from seir import run_seir
@@ -58,102 +57,124 @@ days = st.sidebar.slider("Jours", 30, 365, 180)
 
 if st.button("Lancer Simulation"):
 
-    effective_beta = beta * (1 - barrier_effect)
+    try:
+        # -----------------------------
+        # β effectif
+        # -----------------------------
+        effective_beta = beta * (1 - barrier_effect)
 
-    if lockdown_start < lockdown_end:
-        effective_beta *= (1 - lockdown_strength)
+        if lockdown_start < lockdown_end:
+            effective_beta *= (1 - lockdown_strength)
 
-    vaccinated_population = int(population * vaccination_rate)
-    adjusted_population = population - vaccinated_population
+        vaccinated_population = int(population * vaccination_rate)
+        adjusted_population = max(population - vaccinated_population, 1)
 
-    # =================================================
-    # MODELES
-    # =================================================
+        # -----------------------------
+        # MODELES SAFE CALL
+        # -----------------------------
 
-    if model == "SIR":
-        data = run_sir(adjusted_population, infected, 0, effective_beta, gamma, days)
+        if model == "SIR":
+            data = run_sir(adjusted_population, infected, 0, effective_beta, gamma, days)
 
-    elif model == "SEIR":
-        data = run_seir(adjusted_population, exposed, infected, 0, effective_beta, sigma, gamma, days)
+        elif model == "SEIR":
+            data = run_seir(adjusted_population, exposed, infected, 0, effective_beta, sigma, gamma, days)
 
-    else:
-        data = run_seihrd(adjusted_population, exposed, infected, effective_beta, sigma, gamma, hosp_rate, death_rate, days)
+        else:
+            data = run_seihrd(
+                adjusted_population,
+                exposed,
+                infected,
+                effective_beta,
+                sigma,
+                gamma,
+                hosp_rate,
+                death_rate,
+                days
+            )
 
-    df = pd.DataFrame(data)
+        df = pd.DataFrame(data)
 
-    # =================================================
-    # GRAPH
-    # =================================================
+        # =================================================
+        # GRAPH
+        # =================================================
 
-    fig = go.Figure()
+        fig = go.Figure()
 
-    for col in df.columns:
-        if col != "days":
-            fig.add_trace(go.Scatter(x=df["days"], y=df[col], name=col))
+        for col in df.columns:
+            if col != "days":
+                fig.add_trace(go.Scatter(x=df["days"], y=df[col], name=col))
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # =================================================
-    # INDICATEURS SAFE
-    # =================================================
+        # =================================================
+        # SAFE INDICATORS
+        # =================================================
 
-    peak_I = int(np.nanmax(df["I"]))
+        peak_I = int(np.nanmax(df.get("I", [0])))
 
-    peak_H = int(np.nanmax(df["H"])) if "H" in df else 0
+        peak_H = int(np.nanmax(df.get("H", [0])))
+        deaths = int(df.get("D", pd.Series([0])).iloc[-1])
 
-    deaths = int(df["D"].iloc[-1]) if "D" in df else 0
+        Rt = round(effective_beta / max(gamma, 1e-6), 2)
 
-    Rt = round(effective_beta / max(gamma, 0.0001), 2)
+        col1, col2, col3, col4 = st.columns(4)
 
-    col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Pic Infectieux", peak_I)
+        col2.metric("Pic Hospitalier", peak_H)
+        col3.metric("Décès", deaths)
+        col4.metric("R0", Rt)
 
-    col1.metric("Pic Infectieux", peak_I)
-    col2.metric("Pic Hospitalier", peak_H)
-    col3.metric("Décès", deaths)
-    col4.metric("R0", Rt)
+        # =================================================
+        # CSV
+        # =================================================
 
-    # =================================================
-    # CSV
-    # =================================================
+        st.download_button("CSV", df.to_csv(index=False), "data.csv")
 
-    st.download_button("CSV", df.to_csv(index=False), "data.csv")
+        # =================================================
+        # EXCEL SAFE (NO CRASH CLOUD)
+        # =================================================
 
-    # =================================================
-    # EXCEL SAFE (FIX CLOUD)
-    # =================================================
+        excel_buffer = BytesIO()
 
-    excel_buffer = BytesIO()
+        try:
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                df.to_excel(writer, index=False, sheet_name="data")
+        except:
+            df.to_csv(excel_buffer, index=False)
 
-    with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="data")
+        excel_buffer.seek(0)
 
-    st.download_button(
-        "Excel",
-        data=excel_buffer.getvalue(),
-        file_name="simulation.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        st.download_button(
+            "Excel",
+            data=excel_buffer,
+            file_name="simulation.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-    # =================================================
-    # PDF SIMPLE SAFE
-    # =================================================
+        # =================================================
+        # PDF SAFE
+        # =================================================
 
-    pdf_buffer = BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer)
+        pdf_buffer = BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer)
 
-    styles = getSampleStyleSheet()
-    content = [
-        Paragraph("Rapport Simulation", styles["Title"]),
-        Spacer(1, 12),
-        Paragraph(f"Pic I: {peak_I}", styles["Normal"]),
-        Paragraph(f"Pic H: {peak_H}", styles["Normal"]),
-        Paragraph(f"Décès: {deaths}", styles["Normal"]),
-        Paragraph(f"R0: {Rt}", styles["Normal"]),
-    ]
+        styles = getSampleStyleSheet()
 
-    doc.build(content)
-    pdf_buffer.seek(0)
+        content = [
+            Paragraph("Rapport Simulation Epidémique", styles["Title"]),
+            Spacer(1, 12),
+            Paragraph(f"Pic I: {peak_I}", styles["Normal"]),
+            Paragraph(f"Pic H: {peak_H}", styles["Normal"]),
+            Paragraph(f"Décès: {deaths}", styles["Normal"]),
+            Paragraph(f"R0: {Rt}", styles["Normal"]),
+        ]
 
-    st.download_button("PDF", pdf_buffer, "report.pdf", "application/pdf")
+        doc.build(content)
+        pdf_buffer.seek(0)
 
-    st.success("Simulation terminée")
+        st.download_button("PDF", pdf_buffer, "report.pdf", "application/pdf")
+
+        st.success("Simulation terminée")
+
+    except Exception as e:
+        st.error(f"Erreur simulation: {e}")
