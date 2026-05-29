@@ -58,9 +58,7 @@ days = st.sidebar.slider("Jours", 30, 365, 180)
 if st.button("Lancer Simulation"):
 
     try:
-        # -----------------------------
         # β effectif
-        # -----------------------------
         effective_beta = beta * (1 - barrier_effect)
 
         if lockdown_start < lockdown_end:
@@ -69,9 +67,9 @@ if st.button("Lancer Simulation"):
         vaccinated_population = int(population * vaccination_rate)
         adjusted_population = max(population - vaccinated_population, 1)
 
-        # -----------------------------
-        # MODELES SAFE CALL
-        # -----------------------------
+        # =================================================
+        # MODELES
+        # =================================================
 
         if model == "SIR":
             data = run_sir(adjusted_population, infected, 0, effective_beta, gamma, days)
@@ -79,7 +77,7 @@ if st.button("Lancer Simulation"):
         elif model == "SEIR":
             data = run_seir(adjusted_population, exposed, infected, 0, effective_beta, sigma, gamma, days)
 
-        else:
+        elif model == "SEIHRD":
             data = run_seihrd(
                 adjusted_population,
                 exposed,
@@ -107,13 +105,16 @@ if st.button("Lancer Simulation"):
         st.plotly_chart(fig, use_container_width=True)
 
         # =================================================
-        # SAFE INDICATORS
+        # INDICATEURS (ROBUSTES)
         # =================================================
 
-        peak_I = int(np.nanmax(df.get("I", [0])))
+        peak_I = int(np.nanmax(df["I"].values)) if "I" in df else 0
+        peak_H = int(np.nanmax(df["H"].values)) if "H" in df else 0
 
-        peak_H = int(np.nanmax(df.get("H", [0])))
-        deaths = int(df.get("D", pd.Series([0])).iloc[-1])
+        if "D" in df:
+            deaths = int(df["D"].iloc[-1])
+        else:
+            deaths = 0
 
         Rt = round(effective_beta / max(gamma, 1e-6), 2)
 
@@ -131,16 +132,13 @@ if st.button("Lancer Simulation"):
         st.download_button("CSV", df.to_csv(index=False), "data.csv")
 
         # =================================================
-        # EXCEL SAFE (NO CRASH CLOUD)
+        # EXCEL SAFE
         # =================================================
 
         excel_buffer = BytesIO()
 
-        try:
-            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="data")
-        except:
-            df.to_csv(excel_buffer, index=False)
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="data")
 
         excel_buffer.seek(0)
 

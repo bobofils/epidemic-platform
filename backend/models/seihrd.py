@@ -1,6 +1,16 @@
 import numpy as np
 
-def run_seihrd(population, exposed, infected, beta, sigma, gamma, hosp_rate, death_rate, days):
+def run_seihrd(
+    population,
+    exposed,
+    infected,
+    beta,
+    sigma,
+    gamma,
+    hosp_rate,
+    death_rate,
+    days
+):
 
     S = population - exposed - infected
     E = exposed
@@ -10,24 +20,33 @@ def run_seihrd(population, exposed, infected, beta, sigma, gamma, hosp_rate, dea
     D = 0
 
     results = {
-        "days": [], "S": [], "E": [], "I": [], "H": [], "R": [], "D": []
+        "days": [],
+        "S": [],
+        "E": [],
+        "I": [],
+        "H": [],
+        "R": [],
+        "D": []
     }
 
     for t in range(days):
 
-        new_exposed = beta * S * I / max(population, 1)
+        # stabilité numérique
+        pop = max(population, 1)
+
+        new_exposed = beta * S * I / pop
         new_infected = sigma * E
         new_hospital = hosp_rate * I
         new_recovered = gamma * I
         new_deaths = death_rate * H
         hospital_recovery = 0.05 * H
 
-        S -= new_exposed
-        E += new_exposed - new_infected
-        I += new_infected - new_recovered - new_hospital
-        H += new_hospital - new_deaths - hospital_recovery
-        R += new_recovered + hospital_recovery
-        D += new_deaths
+        S = S - new_exposed
+        E = E + new_exposed - new_infected
+        I = I + new_infected - new_recovered - new_hospital
+        H = H + new_hospital - new_deaths - hospital_recovery
+        R = R + new_recovered + hospital_recovery
+        D = D + new_deaths
 
         S = max(S, 0)
         E = max(E, 0)
