@@ -1,6 +1,6 @@
 import numpy as np
 
-def run_seihrd(
+def run_seihrd_TEST(
     population,
     exposed,
     infected,
