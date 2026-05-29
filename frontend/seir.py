@@ -1,38 +1,8 @@
 import numpy as np
-from scipy.integrate import odeint
 
-
-def equations(
-    y,
-    t,
-    beta,
-    sigma,
-    gamma
-):
-
-    S, E, I, R = y
-
-    dSdt = -beta * S * I
-
-    dEdt = (
-        beta * S * I
-        - sigma * E
-    )
-
-    dIdt = (
-        sigma * E
-        - gamma * I
-    )
-
-    dRdt = gamma * I
-
-    return [
-        dSdt,
-        dEdt,
-        dIdt,
-        dRdt
-    ]
-
+# =====================================================
+# MODELE SEIR
+# =====================================================
 
 def run_seir(
     population,
@@ -45,41 +15,101 @@ def run_seir(
     days
 ):
 
-    susceptible = (
+    # =================================================
+    # ETATS INITIAUX
+    # =================================================
+
+    S = (
         population
         - exposed
         - infected
         - recovered
     )
 
-    y0 = [
-        susceptible,
-        exposed,
-        infected,
-        recovered
-    ]
+    E = exposed
 
-    t = np.linspace(
-        0,
-        days,
-        days
-    )
+    I = infected
 
-    result = odeint(
-        equations,
-        y0,
-        t,
-        args=(
-            beta,
-            sigma,
-            gamma
-        )
-    )
+    R = recovered
 
-    return {
-        "days": t.tolist(),
-        "S": result[:, 0].tolist(),
-        "E": result[:, 1].tolist(),
-        "I": result[:, 2].tolist(),
-        "R": result[:, 3].tolist()
+    # =================================================
+    # RESULTATS
+    # =================================================
+
+    results = {
+
+        "days": [],
+        "S": [],
+        "E": [],
+        "I": [],
+        "R": []
+
     }
+
+    # =================================================
+    # BOUCLE TEMPORELLE
+    # =================================================
+
+    for day in range(days):
+
+        # =============================================
+        # EQUATIONS
+        # =============================================
+
+        new_exposed = (
+            beta * S * I / population
+        )
+
+        new_infected = (
+            sigma * E
+        )
+
+        new_recovered = (
+            gamma * I
+        )
+
+        # =============================================
+        # UPDATE
+        # =============================================
+
+        S -= new_exposed
+
+        E += (
+            new_exposed
+            - new_infected
+        )
+
+        I += (
+            new_infected
+            - new_recovered
+        )
+
+        R += new_recovered
+
+        # =============================================
+        # SECURITE
+        # =============================================
+
+        S = max(S, 0)
+
+        E = max(E, 0)
+
+        I = max(I, 0)
+
+        R = max(R, 0)
+
+        # =============================================
+        # SAVE
+        # =============================================
+
+        results["days"].append(day)
+
+        results["S"].append(S)
+
+        results["E"].append(E)
+
+        results["I"].append(I)
+
+        results["R"].append(R)
+
+    return results

@@ -1,77 +1,8 @@
 import numpy as np
-from scipy.integrate import odeint
 
-
-def equations(
-    y,
-    t,
-    beta,
-    sigma,
-    gamma,
-    hosp_rate,
-    death_rate,
-    recovery_h,
-    vaccination_rate,
-    barrier_effect,
-    lockdown_start,
-    lockdown_end,
-    lockdown_strength
-):
-
-    S, E, I, H, R, D = y
-
-    beta = beta * (
-        1 - barrier_effect
-    )
-
-    if (
-        t >= lockdown_start
-        and t <= lockdown_end
-    ):
-
-        beta = beta * (
-            1 - lockdown_strength
-        )
-
-    dSdt = (
-        -beta * S * I
-        - vaccination_rate * S
-    )
-
-    dEdt = (
-        beta * S * I
-        - sigma * E
-    )
-
-    dIdt = (
-        sigma * E
-        - gamma * I
-        - hosp_rate * I
-    )
-
-    dHdt = (
-        hosp_rate * I
-        - death_rate * H
-        - recovery_h * H
-    )
-
-    dRdt = (
-        gamma * I
-        + recovery_h * H
-        + vaccination_rate * S
-    )
-
-    dDdt = death_rate * H
-
-    return [
-        dSdt,
-        dEdt,
-        dIdt,
-        dHdt,
-        dRdt,
-        dDdt
-    ]
-
+# =====================================================
+# MODELE SEIHRD
+# =====================================================
 
 def run_seihrd(
     population,
@@ -82,68 +13,95 @@ def run_seihrd(
     gamma,
     hosp_rate,
     death_rate,
-    recovery_h,
-    vaccination_rate,
-    barrier_effect,
-    lockdown_start,
-    lockdown_end,
-    lockdown_strength,
     days
 ):
 
-    S0 = (
-        population
-        - exposed
-        - infected
-    )
+    S = population - infected - exposed
+    E = exposed
+    I = infected
+    H = 0
+    R = 0
+    D = 0
 
-    y0 = [
-        S0,
-        exposed,
-        infected,
-        0,
-        0,
-        0
-    ]
+    dt = 1
 
-    t = np.linspace(
-        0,
-        days,
-        days
-    )
+    results = {
 
-    result = odeint(
-        equations,
-        y0,
-        t,
-        args=(
-            beta,
-            sigma,
-            gamma,
-            hosp_rate,
-            death_rate,
-            recovery_h,
-            vaccination_rate,
-            barrier_effect,
-            lockdown_start,
-            lockdown_end,
-            lockdown_strength
-        )
-    )
+        "days": [],
+        "S": [],
+        "E": [],
+        "I": [],
+        "H": [],
+        "R": [],
+        "D": []
 
-    return {
-
-        "days": t.tolist(),
-
-        "S": result[:, 0].tolist(),
-
-        "E": result[:, 1].tolist(),
-
-        "I": result[:, 2].tolist(),
-
-        "H": result[:, 3].tolist(),
-
-        "R": result[:, 4].tolist(),
-
-        "D": result[:, 5].tolist()
     }
+
+    for day in range(days):
+
+        # =============================================
+        # EQUATIONS
+        # =============================================
+
+        new_exposed = (
+            beta * S * I / population
+        )
+
+        new_infected = sigma * E
+
+        new_recovered = gamma * I
+
+        new_hospitalized = hosp_rate * I
+
+        new_deaths = death_rate * H
+
+        hospital_recovery = 0.05 * H
+
+        # =============================================
+        # UPDATE
+        # =============================================
+
+        S -= new_exposed
+
+        E += (
+            new_exposed - new_infected
+        )
+
+        I += (
+            new_infected
+            - new_recovered
+            - new_hospitalized
+        )
+
+        H += (
+            new_hospitalized
+            - new_deaths
+            - hospital_recovery
+        )
+
+        R += (
+            new_recovered
+            + hospital_recovery
+        )
+
+        D += new_deaths
+
+        # =============================================
+        # SAVE
+        # =============================================
+
+        results["days"].append(day)
+
+        results["S"].append(max(S, 0))
+
+        results["E"].append(max(E, 0))
+
+        results["I"].append(max(I, 0))
+
+        results["H"].append(max(H, 0))
+
+        results["R"].append(max(R, 0))
+
+        results["D"].append(max(D, 0))
+
+    return results
