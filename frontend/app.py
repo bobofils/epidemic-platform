@@ -2,16 +2,20 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import io
+import tempfile
 
 from io import BytesIO
 
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
-    Spacer
+    Spacer,
+    Image
 )
 
 from reportlab.lib.styles import getSampleStyleSheet
+
+from openpyxl.drawing.image import Image as XLImage
 
 from sir import run_sir
 from seir import run_seir
@@ -175,14 +179,15 @@ multi_scenario = st.sidebar.checkbox(
 )
 
 # =====================================================
-# PDF
+# GENERATE PDF
 # =====================================================
 
 def generate_pdf(
     peak_I,
     peak_H,
     deaths,
-    Rt
+    Rt,
+    image_path
 ):
 
     buffer = io.BytesIO()
@@ -200,7 +205,7 @@ def generate_pdf(
         )
     )
 
-    content.append(Spacer(1, 12))
+    content.append(Spacer(1, 20))
 
     content.append(
         Paragraph(
@@ -225,10 +230,20 @@ def generate_pdf(
 
     content.append(
         Paragraph(
-            f"R0 Effectif : {Rt}",
+            f"R0 Effectif : {Rt:.2f}",
             styles["Normal"]
         )
     )
+
+    content.append(Spacer(1, 20))
+
+    img = Image(
+        image_path,
+        width=500,
+        height=300
+    )
+
+    content.append(img)
 
     doc.build(content)
 
@@ -266,7 +281,7 @@ if st.button("Lancer Simulation"):
     )
 
     # =================================================
-    # MULTI SCENARIOS
+    # COMPARAISON
     # =================================================
 
     if multi_scenario:
@@ -413,6 +428,17 @@ if st.button("Lancer Simulation"):
     )
 
     # =================================================
+    # SAVE GRAPH IMAGE
+    # =================================================
+
+    tmpfile = tempfile.NamedTemporaryFile(
+        suffix=".png",
+        delete=False
+    )
+
+    fig.write_image(tmpfile.name)
+
+    # =================================================
     # INDICATEURS
     # =================================================
 
@@ -504,6 +530,24 @@ if st.button("Lancer Simulation"):
             sheet_name="Simulation"
         )
 
+        workbook = writer.book
+
+        worksheet = writer.sheets[
+            "Simulation"
+        ]
+
+        img_excel = XLImage(
+            tmpfile.name
+        )
+
+        img_excel.width = 600
+        img_excel.height = 350
+
+        worksheet.add_image(
+            img_excel,
+            "J2"
+        )
+
     excel_buffer.seek(0)
 
     st.download_button(
@@ -521,7 +565,8 @@ if st.button("Lancer Simulation"):
         peak_infected,
         peak_hospital,
         total_deaths,
-        Rt
+        Rt,
+        tmpfile.name
     )
 
     st.download_button(
