@@ -58,7 +58,9 @@ days = st.sidebar.slider("Jours", 30, 365, 180)
 if st.button("Lancer Simulation"):
 
     try:
+        # =========================
         # β effectif
+        # =========================
         effective_beta = beta * (1 - barrier_effect)
 
         if lockdown_start < lockdown_end:
@@ -67,9 +69,9 @@ if st.button("Lancer Simulation"):
         vaccinated_population = int(population * vaccination_rate)
         adjusted_population = max(population - vaccinated_population, 1)
 
-        # =================================================
-        # MODELES
-        # =================================================
+        # =========================
+        # MODELES (SAFE CALLS)
+        # =========================
 
         if model == "SIR":
             data = run_sir(adjusted_population, infected, 0, effective_beta, gamma, days)
@@ -92,9 +94,9 @@ if st.button("Lancer Simulation"):
 
         df = pd.DataFrame(data)
 
-        # =================================================
+        # =========================
         # GRAPH
-        # =================================================
+        # =========================
 
         fig = go.Figure()
 
@@ -104,17 +106,13 @@ if st.button("Lancer Simulation"):
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # =================================================
-        # INDICATEURS (ROBUSTES)
-        # =================================================
+        # =========================
+        # INDICATEURS SAFE
+        # =========================
 
-        peak_I = int(np.nanmax(df["I"].values)) if "I" in df else 0
-        peak_H = int(np.nanmax(df["H"].values)) if "H" in df else 0
-
-        if "D" in df:
-            deaths = int(df["D"].iloc[-1])
-        else:
-            deaths = 0
+        peak_I = int(np.nanmax(df["I"])) if "I" in df else 0
+        peak_H = int(np.nanmax(df["H"])) if "H" in df else 0
+        deaths = int(df["D"].iloc[-1]) if "D" in df else 0
 
         Rt = round(effective_beta / max(gamma, 1e-6), 2)
 
@@ -125,18 +123,17 @@ if st.button("Lancer Simulation"):
         col3.metric("Décès", deaths)
         col4.metric("R0", Rt)
 
-        # =================================================
+        # =========================
         # CSV
-        # =================================================
+        # =========================
 
         st.download_button("CSV", df.to_csv(index=False), "data.csv")
 
-        # =================================================
+        # =========================
         # EXCEL SAFE
-        # =================================================
+        # =========================
 
         excel_buffer = BytesIO()
-
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="data")
 
@@ -149,9 +146,9 @@ if st.button("Lancer Simulation"):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # =================================================
+        # =========================
         # PDF SAFE
-        # =================================================
+        # =========================
 
         pdf_buffer = BytesIO()
         doc = SimpleDocTemplate(pdf_buffer)
@@ -161,8 +158,8 @@ if st.button("Lancer Simulation"):
         content = [
             Paragraph("Rapport Simulation Epidémique", styles["Title"]),
             Spacer(1, 12),
-            Paragraph(f"Pic I: {peak_I}", styles["Normal"]),
-            Paragraph(f"Pic H: {peak_H}", styles["Normal"]),
+            Paragraph(f"Pic Infectieux: {peak_I}", styles["Normal"]),
+            Paragraph(f"Pic Hospitalier: {peak_H}", styles["Normal"]),
             Paragraph(f"Décès: {deaths}", styles["Normal"]),
             Paragraph(f"R0: {Rt}", styles["Normal"]),
         ]
@@ -172,7 +169,7 @@ if st.button("Lancer Simulation"):
 
         st.download_button("PDF", pdf_buffer, "report.pdf", "application/pdf")
 
-        st.success("Simulation terminée")
+        st.success("Simulation terminée avec succès")
 
     except Exception as e:
         st.error(f"Erreur simulation: {e}")
