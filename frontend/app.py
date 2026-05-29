@@ -9,7 +9,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 from sir import run_sir
 from seir import run_seir
-from seihrd import run_seihrd_TEST as run_seihrd
+from seihrd import run_seihrd
 
 # =====================================================
 # CONFIG
